@@ -1,38 +1,128 @@
 package jni
 
 import (
-	"github.com/alist-org/alist/v3/cmd"
+	"context"
+	"fmt"
 	"github.com/alist-org/alist/v3/cmd/flags"
 	"github.com/alist-org/alist/v3/drivers/alist_v3"
+	"github.com/alist-org/alist/v3/internal/bootstrap"
+	"github.com/alist-org/alist/v3/internal/bootstrap/data"
+	"github.com/alist-org/alist/v3/internal/conf"
 	"github.com/alist-org/alist/v3/internal/errs"
 	"github.com/alist-org/alist/v3/internal/fs"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/internal/op"
 	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/alist-org/alist/v3/server"
 	"github.com/alist-org/alist/v3/server/common"
+	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	"net/http"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
+	"time"
 )
 
-func ExecCommand(jsonArgs string) string {
-	var args []string
-	err := utils.Json.UnmarshalFromString(jsonArgs, &args)
+var httpSrv *http.Server
+
+func InitConfig(args string) string {
+	log.Infof("prepare to init...")
+	var initArgs InitArgs
+	err := utils.Json.UnmarshalFromString(args, &initArgs)
 	if err != nil {
-		log.Errorf("failed unmarshal storageConfig: %+v", err)
-		return Error("failed unmarshal args json: " + err.Error())
+		log.Errorf("failed unmarshal init args: %+v", err)
+		return Error("failed unmarshal init args: " + err.Error())
 	}
 
-	cmd.RootCmd.SetArgs(args)
-	if err := cmd.RootCmd.Execute(); err != nil {
-		log.Errorf("execute error: %+v", err)
-		return Error("execute error: " + err.Error())
-	}
-	return OK("")
+	flags.DataDir = initArgs.DataDir
+	flags.Debug = initArgs.Debug
+	flags.NoPrefix = initArgs.NoPrefix
+	flags.Dev = initArgs.Dev
+	flags.ForceBinDir = initArgs.ForceBinDir
+	flags.LogStd = initArgs.LogStd
+
+	bootstrap.InitConfig()
+	bootstrap.Log()
+	log.SetOutput(log.StandardLogger().Out)
+	bootstrap.InitDB()
+	data.InitData()
+	bootstrap.InitIndex()
+	log.Infof("init done!")
+	return OK("init done!")
 }
 
-func GetAdmin(dataDir string) string {
-	flags.DataDir = dataDir
-	cmd.Init()
+func StartServer(args string) string {
+	InitConfig(args)
+	if httpSrv != nil {
+		return Error("http server has been running")
+	}
+	println("StartServer")
+	log.Infof("start http server...")
+	bootstrap.InitAria2()
+	bootstrap.InitQbittorrent()
+	println("LoadStorages")
+	bootstrap.LoadStorages()
+	if !flags.Debug && !flags.Dev {
+		gin.SetMode(gin.ReleaseMode)
+	}
+	println("gin.New")
+	r := gin.New()
+	r.Use(gin.LoggerWithWriter(log.StandardLogger().Out), gin.RecoveryWithWriter(log.StandardLogger().Out))
+	server.Init(r)
+	httpBase := fmt.Sprintf("%s:%d", conf.Conf.Address, conf.Conf.Port)
+
+	println("&http.Server")
+	httpSrv = &http.Server{Addr: httpBase, Handler: r}
+
+	log.Infof("http server start at %s", httpBase)
+	go func() {
+		println("ListenAndServe")
+		err := httpSrv.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatalf("http server failed to start: %s", err.Error())
+			httpSrv = nil
+		}
+	}()
+
+	go func() {
+		var quit = make(chan os.Signal, 1)
+		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+		<-quit
+		shutdown()
+	}()
+
+	return OK("http server start at " + httpBase)
+}
+
+func StopServer() string {
+	shutdown()
+	return OK("http server exit")
+}
+
+func shutdown() {
+	if httpSrv == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	var waitShutdown sync.WaitGroup
+	waitShutdown.Add(1)
+	go func() {
+		defer waitShutdown.Done()
+		if err := httpSrv.Shutdown(ctx); err != nil {
+			log.Fatal("http server shutdown:", err)
+		}
+	}()
+	waitShutdown.Wait()
+	httpSrv = nil
+
+	log.Println("http server exit")
+}
+
+func GetAdmin() string {
 	admin, err := op.GetAdmin()
 	if err != nil {
 		log.Errorf("failed get admin user: %+v", err)
@@ -50,8 +140,6 @@ func ListFile(jsonArgs string) string {
 		log.Errorf("failed unmarshal storageConfig: %+v", err)
 		return Error("failed unmarshal args json: " + err.Error())
 	}
-
-	Init()
 
 	admin, err := op.GetAdmin()
 	if err != nil {

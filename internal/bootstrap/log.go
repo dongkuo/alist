@@ -52,6 +52,5 @@ func Log() {
 		logrus.SetOutput(w)
 	}
 	log.SetOutput(logrus.StandardLogger().Out)
-	utils.Log.SetOutput(logrus.StandardLogger().Out)
 	utils.Log.Infof("init logrus...")
 }

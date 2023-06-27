@@ -1,8 +1,8 @@
-ANDROID_HOME=/d/software/Android/Sdk
-ANDROID_NDK_BIN=$(ANDROID_HOME)/ndk/25.2.9519653/toolchains/llvm/prebuilt/windows-x86_64/bin
+ANDROID_HOME=/Users/derker/Library/Android/sdk
+ANDROID_NDK_BIN=$(ANDROID_HOME)/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin
 
 BUILD_MODULE=./main.go
-TARGET_DIR=../../jniLibs
+TARGET_DIR=/Users/derker/Code/android/alist-android/app/src/main/jniLibs
 TARGET_NAME=libalist.so
 
 android-armv7a:

@@ -5,17 +5,32 @@ import (
 	"github.com/alist-org/alist/v3/jni"
 )
 
-//export execCommand
-func execCommand(in *C.char) *C.char {
+//export initConfig
+func initConfig(in *C.char) *C.char {
 	var args = C.GoString(in)
-	var result = jni.ExecCommand(args)
+	println("initConfig: ", args)
+	var result = jni.InitConfig(args)
+	return C.CString(result)
+}
+
+//export startServer
+func startServer(in *C.char) *C.char {
+	var args = C.GoString(in)
+	println("startServer")
+	var result = jni.StartServer(args)
+	return C.CString(result)
+}
+
+//export stopServer
+func stopServer() *C.char {
+	println("stopServer")
+	var result = jni.StopServer()
 	return C.CString(result)
 }
 
 //export getAdmin
-func getAdmin(in *C.char) *C.char {
-	var dataDir = C.GoString(in)
-	var result = jni.GetAdmin(dataDir)
+func getAdmin() *C.char {
+	var result = jni.GetAdmin()
 	return C.CString(result)
 }
 
@@ -28,6 +43,5 @@ func listFile(in *C.char) *C.char {
 }
 
 func main() {
-	var json = jni.ListFile(`{"page":1,"path":"/","per_page":50,"refresh":false}`)
-	println(json)
+	jni.InitConfig(`{"dataDir": "data", "logStd": true}`)
 }
