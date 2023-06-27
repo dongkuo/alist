@@ -19,5 +19,15 @@ func getAdmin(in *C.char) *C.char {
 	return C.CString(result)
 }
 
+//export listFile
+func listFile(in *C.char) *C.char {
+	var args = C.GoString(in)
+	println("listFile: ", args)
+	var result = jni.ListFile(args)
+	return C.CString(result)
+}
+
 func main() {
+	var json = jni.ListFile(`{"page":1,"path":"/","per_page":50,"refresh":false}`)
+	println(json)
 }
