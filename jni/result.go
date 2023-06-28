@@ -6,10 +6,10 @@ import (
 	"github.com/alist-org/alist/v3/pkg/utils"
 )
 
-const okCode = 0
+const okCode = 200
 const okMessage = "success"
 const commonErrCode = 1
-const jsonMarshalErr = `{"code":1,"err":"json marshal error: %s"}`
+const jsonMarshalErr = `{"code":400,"err":"json marshal error: %s"}`
 
 type Result struct {
 	Code    int    `json:"code"`
