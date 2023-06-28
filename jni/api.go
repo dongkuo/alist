@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"github.com/alist-org/alist/v3/cmd/flags"
+	_ "github.com/alist-org/alist/v3/drivers"
 	"github.com/alist-org/alist/v3/drivers/alist_v3"
 	"github.com/alist-org/alist/v3/internal/bootstrap"
 	"github.com/alist-org/alist/v3/internal/bootstrap/data"
 	"github.com/alist-org/alist/v3/internal/conf"
+	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/errs"
 	"github.com/alist-org/alist/v3/internal/fs"
 	"github.com/alist-org/alist/v3/internal/model"
@@ -34,7 +36,7 @@ func InitConfig(args string) string {
 	err := utils.Json.UnmarshalFromString(args, &initArgs)
 	if err != nil {
 		log.Errorf("failed unmarshal init args: %+v", err)
-		return Error("failed unmarshal init args: " + err.Error())
+		return Error("failed unmarshal init args, " + err.Error())
 	}
 
 	flags.DataDir = initArgs.DataDir
@@ -50,36 +52,54 @@ func InitConfig(args string) string {
 	bootstrap.InitDB()
 	data.InitData()
 	bootstrap.InitIndex()
+	bootstrap.InitAria2()
+	bootstrap.InitQbittorrent()
+	loadStorages()
 	log.Infof("init done!")
+	println("InitConfig done, DataDir: ", flags.DataDir)
 	return OK("init done!")
 }
 
-func StartServer(args string) string {
-	InitConfig(args)
+func loadStorages() {
+	storages, err := db.GetEnabledStorages()
+	if err != nil {
+		utils.Log.Fatalf("failed get enabled storages: %+v", err)
+	}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func(storages []model.Storage) {
+		defer wg.Done()
+		for i := range storages {
+			err := op.LoadStorage(context.Background(), storages[i])
+			if err != nil {
+				utils.Log.Errorf("failed get enabled storages: %+v", err)
+			} else {
+				utils.Log.Infof("success load storage: [%s], driver: [%s]",
+					storages[i].MountPath, storages[i].Driver)
+			}
+		}
+		conf.StoragesLoaded = true
+	}(storages)
+	wg.Wait()
+}
+
+func StartServer() string {
 	if httpSrv != nil {
 		return Error("http server has been running")
 	}
-	println("StartServer")
 	log.Infof("start http server...")
-	bootstrap.InitAria2()
-	bootstrap.InitQbittorrent()
-	println("LoadStorages")
-	bootstrap.LoadStorages()
 	if !flags.Debug && !flags.Dev {
 		gin.SetMode(gin.ReleaseMode)
 	}
-	println("gin.New")
 	r := gin.New()
 	r.Use(gin.LoggerWithWriter(log.StandardLogger().Out), gin.RecoveryWithWriter(log.StandardLogger().Out))
 	server.Init(r)
 	httpBase := fmt.Sprintf("%s:%d", conf.Conf.Address, conf.Conf.Port)
 
-	println("&http.Server")
 	httpSrv = &http.Server{Addr: httpBase, Handler: r}
 
 	log.Infof("http server start at %s", httpBase)
 	go func() {
-		println("ListenAndServe")
 		err := httpSrv.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
 			log.Fatalf("http server failed to start: %s", err.Error())
@@ -126,7 +146,7 @@ func GetAdmin() string {
 	admin, err := op.GetAdmin()
 	if err != nil {
 		log.Errorf("failed get admin user: %+v", err)
-		return Error("failed get admin user: " + err.Error())
+		return Error("failed get admin user, " + err.Error())
 	} else {
 		log.Infof("admin user's info: \nusername: %s\npassword: %s", admin.Username, admin.Password)
 		return OK(Account{admin.Username, admin.Password})
@@ -138,25 +158,25 @@ func ListFile(jsonArgs string) string {
 	err := utils.Json.UnmarshalFromString(jsonArgs, &req)
 	if err != nil {
 		log.Errorf("failed unmarshal storageConfig: %+v", err)
-		return Error("failed unmarshal args json: " + err.Error())
+		return Error("failed unmarshal args json, " + err.Error())
 	}
 
 	admin, err := op.GetAdmin()
 	if err != nil {
 		log.Errorf("failed get admin user: %+v", err)
-		return Error("failed get admin user: " + err.Error())
+		return Error("failed get admin user, " + err.Error())
 	}
 
 	reqPath, err := admin.JoinPath(req.Path)
 	if err != nil {
 		log.Errorf("failed get admin user req path: %+v", err)
-		return Error("failed get admin user req path: " + err.Error())
+		return Error("failed get admin user req path, " + err.Error())
 	}
 
 	meta, err := op.GetNearestMeta(reqPath)
 	if err != nil {
 		if !errors.Is(errors.Cause(err), errs.MetaNotFound) {
-			return Error("failed get meta: " + err.Error())
+			return Error("failed get meta, " + err.Error())
 		}
 	}
 
@@ -165,6 +185,10 @@ func ListFile(jsonArgs string) string {
 	ctx.Set("meta", meta)
 
 	objs, err := fs.List(&ctx, reqPath, &fs.ListArgs{Refresh: req.Refresh})
+	if err != nil {
+		return Error("failed list file, " + err.Error())
+	}
+
 	total, objs := pagination(objs, &req.PageReq)
 	provider := "unknown"
 	storage, err := fs.GetStorage(reqPath, &fs.GetStoragesArgs{})

@@ -1,11 +1,11 @@
-ANDROID_HOME=/Users/derker/Library/Android/sdk
-ANDROID_NDK_BIN=$(ANDROID_HOME)/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin
+ANDROID_HOME=/d/software/Android/Sdk
+ANDROID_NDK_BIN=$(ANDROID_HOME)/ndk/25.2.9519653/toolchains/llvm/prebuilt/windows-x86_64/bin
 
 BUILD_MODULE=./main.go
-TARGET_DIR=/Users/derker/Code/android/alist-android/app/src/main/jniLibs
+TARGET_DIR=../../jniLibs
 TARGET_NAME=libalist.so
 
-android-armv7a:
+android-armeabi-v7a:
 	CGO_ENABLED=1 \
 	GOOS=android \
 	GOARCH=arm \
@@ -13,7 +13,7 @@ android-armv7a:
 	CC=$(ANDROID_NDK_BIN)/armv7a-linux-androideabi21-clang \
 	go build -buildmode=c-shared -o $(TARGET_DIR)/armeabi-v7a/${TARGET_NAME} ${BUILD_MODULE}
 
-android-arm64:
+android-arm64-v8a:
 	CGO_ENABLED=1 \
 	GOOS=android \
 	GOARCH=arm64 \
@@ -34,4 +34,5 @@ android-x86_64:
 	CC=$(ANDROID_NDK_BIN)/x86_64-linux-android21-clang \
 	go build -buildmode=c-shared -o $(TARGET_DIR)/x86_64/${TARGET_NAME} ${BUILD_MODULE}
 
-android: android-armv7a android-arm64 android-x86 android-x86_64
+android: android-armeabi-v7a android-arm64-v8a android-x86 android-x86_64
+quick: android-arm64-v8a android-x86
