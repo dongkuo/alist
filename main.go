@@ -46,10 +46,11 @@ func listFile(in *C.char) *C.char {
 }
 
 func main() {
-	jni.InitConfig(`{"dataDir": "data", "logStd": true}`)
-	var files = jni.ListFile(`{"page":1,"path":"/","per_page":50,"refresh":false}`)
-	//jni.StartServer()
-	println(files)
+	jni.InitConfig(`{"data_dir": "data", "log_std": true}`)
+	jni.GetAdmin()
+	//var files = jni.ListFile(`{"page":1,"path":"/","per_page":50,"refresh":false}`)
+	//println(files)
+	jni.StartServer()
 	var quit = make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
