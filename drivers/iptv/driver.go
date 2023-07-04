@@ -1,13 +1,10 @@
 package iptv
 
 import (
-	"bytes"
 	"context"
-	"github.com/alist-org/alist/v3/drivers/base"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/errs"
 	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/grafov/m3u8"
 )
 
 type IPTV struct {
@@ -32,7 +29,7 @@ func (d *IPTV) Drop(ctx context.Context) error {
 }
 
 func (d *IPTV) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
-
+	d.request(d.PlaylistUrl)
 	return nil, errs.NotImplement
 }
 
@@ -72,13 +69,7 @@ func (d *IPTV) Put(ctx context.Context, dstDir model.Obj, stream model.FileStrea
 }
 
 func (d *IPTV) request(uri string) ([]byte, error) {
-	var req = base.RestyClient.R()
-	res, err := req.Get(uri)
-	if err != nil {
-		return nil, err
-	}
-	var bs = res.Body()
-	m3u8.Decode(bytes.NewBuffer(bs), true)
+	return nil, nil
 }
 
 var _ driver.Driver = (*IPTV)(nil)

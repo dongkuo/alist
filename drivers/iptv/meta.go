@@ -6,6 +6,7 @@ import (
 )
 
 type Addition struct {
+	driver.RootPath
 	PlaylistUrl string `json:"playlist_url" help:"The url typically ends with .m3u or .m3u8"  required:"true"`
 }
 
