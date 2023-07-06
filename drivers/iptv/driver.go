@@ -2,9 +2,14 @@ package iptv
 
 import (
 	"context"
+	"fmt"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/errs"
 	"github.com/alist-org/alist/v3/internal/model"
+	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/jamesnetherton/m3u"
+	"strings"
+	"time"
 )
 
 type IPTV struct {
@@ -29,12 +34,48 @@ func (d *IPTV) Drop(ctx context.Context) error {
 }
 
 func (d *IPTV) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
-	d.request(d.PlaylistUrl)
-	return nil, errs.NotImplement
+	playlist, err := m3u.Parse(d.PlaylistUrl)
+	if err != nil {
+		return nil, err
+	}
+	return utils.SliceConvert(playlist.Tracks, func(track m3u.Track) (model.Obj, error) {
+		return trackToObj(track), nil
+	})
+}
+
+func trackToObj(track m3u.Track) model.Obj {
+	var id, name, thumb = track.Name, track.Name, ""
+	for _, tag := range track.Tags {
+		if tag.Name == "tvg-name" {
+			name = tag.Value
+		} else if tag.Name == "tvg-id" {
+			id = tag.Value
+		} else if tag.Name == "tvg-logo" {
+			thumb = tag.Value
+		}
+	}
+
+	if !strings.HasSuffix(name, ".m3u8") {
+		name += ".m3u8"
+	}
+
+	return &model.ObjThumbURL{
+		Object: model.Object{
+			ID:       id,
+			Name:     name,
+			Size:     0,
+			Modified: time.Now(),
+			IsFolder: false,
+		},
+		Thumbnail: model.Thumbnail{Thumbnail: thumb},
+		Url:       model.Url{Url: track.URI},
+	}
 }
 
 func (d *IPTV) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
-	// TODO return link of file, required
+	if url, ok := file.(model.URL); ok {
+		return &model.Link{URL: url.URL()}, nil
+	}
 	return nil, errs.NotImplement
 }
 
@@ -68,7 +109,14 @@ func (d *IPTV) Put(ctx context.Context, dstDir model.Obj, stream model.FileStrea
 	return errs.NotImplement
 }
 
-func (d *IPTV) request(uri string) ([]byte, error) {
+func (d *IPTV) request(url string) ([]byte, error) {
+	playlist, err := m3u.Parse(url)
+	if err != nil {
+		return nil, err
+	}
+	for _, track := range playlist.Tracks {
+		fmt.Printf("track: name=%s\nuri=%s\ntags=%s\nlen=%d\n\n", track.Name, track.URI, track.Tags, track.Length)
+	}
 	return nil, nil
 }
 
